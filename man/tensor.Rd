@@ -83,14 +83,33 @@ independently useful, and these have got shortcuts as follows.
   A \%*t\% B # same answer
 
   A <- A \%O\% A # now 2 by 3 by 2 by 3
-  storage.mode(A) # still integer
-  A <- A + 0.0 # storage mode now "double"
   C <- tensor(A, B, 2, 2) # will be 2 by 2 by 3 by 4
   D <- tensor(C, B, c(4, 3), c(1, 2)) # will be 2 by 2
 
   E <- matrix(9:12, 2, 2)
   s <- tensor(D, E, 1:2, 1:2) # scalar, NO dim attribute
   s == sum(D * E) # TRUE
+
+\testonly{
+  # test the various storage modes
+  B <- A # both mode integer
+  storage.mode(s <- tensor(A, B, 4:1, 4:1))=="integer"
+  s == sum(A * B)
+  storage.mode(s <- tensor(A, B + 0.0, 4:1, 4:1))=="double"
+  s == sum(A * (B + 0.0))
+  storage.mode(s <- tensor(A + 0.0, B, 4:1, 4:1))=="double"
+  s == sum((A + 0.0) * B)
+  storage.mode(s <- tensor(A, B + 2i, 4:1, 4:1))=="complex"
+  s == sum(A * (B + 2i))
+  storage.mode(s <- tensor(A + 2i, B, 4:1, 4:1))=="complex"
+  s == sum((A + 2i) * B)
+  storage.mode(s <- tensor(A + 0.0, B + 2i, 4:1, 4:1))=="complex"
+  s == sum((A + 0.0)* (B + 2i))
+  storage.mode(s <- tensor(A + 2i, B + 0.0, 4:1, 4:1))=="complex"
+  s == sum((A + 2i)* (B + 0.0))
+  storage.mode(s <- tensor(A + 2i, B + 2i, 4:1, 4:1))=="complex"
+  s == sum((A + 2i)* (B + 2i))
+  }
 }
 
 \keyword{array}

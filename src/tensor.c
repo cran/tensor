@@ -1,6 +1,15 @@
 /*
- * Tensor product of two arrays, using strides to avoid 
- * duplication.  Jonathan Rougier <J.C.Rougier@durham.ac.uk>
+ Tensor product of two arrays, using strides to avoid 
+ duplication.  Jonathan Rougier <J.C.Rougier@durham.ac.uk>
+ 
+ v1.0 09.09.00
+
+ 10.09.00 Minor correction in default case of main switch
+ 11.09.00 Cleaner case switching with modeAB
+ 12.09.00 Tidy up the case switching in CPLXSXP
+ 15.09.00 Cleaner still with modeA and modeB
+ 05.10.00 Changes in generic vector syntax for R v1.2
+
  */
 
 #include <R.h>
@@ -78,26 +87,36 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
   int Isum, ItermA, ItermB;
   double Dsum, DtermA, DtermB;
   Rcomplex Csum, CtermA, CtermB;
-  
+
   SEXP X;
-  SEXPTYPE modeX;
-
-  /* coercion is wasteful of memory: we'll switch instead */
-
-  if (IS_INTEGER(A) && IS_INTEGER(B))
-    modeX = INTSXP;
-  else if ((IS_NUMERIC(A) && IS_NUMERIC(B))
-	   || (IS_INTEGER(A) && IS_NUMERIC(B))
-	   || (IS_NUMERIC(A) && IS_INTEGER(B)))
-    modeX = REALSXP;
-  else if ((IS_COMPLEX(A) && IS_COMPLEX(B))
-	   || (IS_COMPLEX(A) && (IS_NUMERIC(B) || IS_INTEGER(B)))
-	   || ((IS_NUMERIC(A) || IS_INTEGER(A)) && IS_COMPLEX(B)))
-    modeX = CPLXSXP;
-  else error("Cannot take the tensor product of these objects");
+  SEXPTYPE modeX, modeA, modeB;
 
   if (GET_LENGTH(A) == 0 || GET_LENGTH(B) == 0)
     error("Require objects of non-zero length");
+
+  /* coercion is wasteful of memory: we'll switch instead */
+
+  if (IS_INTEGER(A))
+    modeA = INTSXP;
+  else if (IS_NUMERIC(A))
+    modeA = REALSXP;
+  else if (IS_COMPLEX(A))
+    modeA = CPLXSXP;
+  else error("Inadmissable type for \"A\"");
+
+  if (IS_INTEGER(B))
+    modeB = INTSXP;
+  else if (IS_NUMERIC(B))
+    modeB = REALSXP;
+  else if (IS_COMPLEX(B))
+    modeB = CPLXSXP;
+  else error("Inadmissable type for \"B\"");
+
+  if (modeA==INTSXP && modeB==INTSXP)
+    modeX = INTSXP;
+  else if (modeA!=CPLXSXP && modeB!=CPLXSXP)
+    modeX = REALSXP;
+  else modeX = CPLXSXP;
 
   /* handle vector A or B without coercion */
 
@@ -255,14 +274,22 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
       PROTECT(dnA = GET_DIMNAMES(A));
     else if (GET_NAMES(A) != NULL_USER_OBJECT) {
       PROTECT(dnA = NEW_LIST(1));
+#if R_VERSION >= R_Version(1, 2, 0)
+      SET_VECTOR_ELT(dnA, 0, GET_NAMES(A));
+#else
       LIST_POINTER(dnA)[0] = GET_NAMES(A);
+#endif
     } else PROTECT(dnA = NULL_USER_OBJECT);
 
     if (IS_ARRAY(B))
       PROTECT(dnB = GET_DIMNAMES(B));
     else if (GET_NAMES(B) != NULL_USER_OBJECT) {
       PROTECT(dnB = NEW_LIST(1));
+#if R_VERSION >= R_Version(1, 2, 0)
+      SET_VECTOR_ELT(dnB, 0, GET_NAMES(B));
+#else
       LIST_POINTER(dnB)[0] = GET_NAMES(B);
+#endif
     } else PROTECT(dnB = NULL_USER_OBJECT);
 
     if ((nppI > 0 && dnA != NULL_USER_OBJECT)
@@ -276,9 +303,15 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
       if (dnA != NULL_USER_OBJECT) {
 	PROTECT(dn = GET_NAMES(dnA));
 	for (r = 0; r < nppI; r++) {
+#if R_VERSION >= R_Version(1, 2, 0)
+          SET_VECTOR_ELT(dimnames, r, VECTOR_ELT(dnA, permA[r]));
+	  if (dn != NULL_USER_OBJECT)
+	    SET_STRING_ELT(dimnamesnames, r, STRING_ELT(dn, permA[r]));
+#else
 	  LIST_POINTER(dimnames)[r] = LIST_POINTER(dnA)[permA[r]];
 	  if (dn != NULL_USER_OBJECT)
 	    CHARACTER_POINTER(dimnamesnames)[r] = CHARACTER_POINTER(dn)[permA[r]];
+#endif
 	}
 	UNPROTECT(1);
       }
@@ -286,9 +319,15 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
       if (dnB != NULL_USER_OBJECT) {
 	PROTECT(dn = GET_NAMES(dnB));
 	for (r = 0; r < nppK; r++) {
+#if R_VERSION >= R_Version(1, 2, 0)
+	  SET_VECTOR_ELT(dimnames, nppI + r, VECTOR_ELT(dnB, permB[r]));
+	  if (dn != NULL_USER_OBJECT)
+	    SET_STRING_ELT(dimnamesnames, nppI + r, STRING_ELT(dn, permB[r]));
+#else
 	  LIST_POINTER(dimnames)[nppI + r] = LIST_POINTER(dnB)[permB[r]];
 	  if (dn != NULL_USER_OBJECT)
 	    CHARACTER_POINTER(dimnamesnames)[nppI + r] = CHARACTER_POINTER(dn)[permB[r]];
+#endif
 	}
 	UNPROTECT(1);
       }
@@ -301,31 +340,6 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
     UNPROTECT(2); /* dnA and dnB */
   }
 
-  /* integer NA requires special handling (see below) */
-
-  if (modeX==INTSXP)
-    for (r = 0; r < xlen; r++)
-      INTEGER_POINTER(X)[r] = NA_INTEGER;
-
-  /* set up the default values for non-IEEE 754 */
-
-#ifndef IEEE_754
-  switch(modeX) {
-  case INTSXP:
-    break;
-  case REALSXP:
-    for (r = 0; r < xlen; r++)
-      NUMERIC_POINTER(X)[r] = NA_REAL;
-    break;
-  case CPLXSXP:
-    for (r = 0; r < xlen; r++) {
-      COMPLEX_POINTER(X)[r].r = NA_REAL;
-      COMPLEX_POINTER(X)[r].i = NA_REAL;
-    }
-    break;
-  }
-#endif
-
   /* huge switch here to handle each mode differently:
      not the most elegant, but certainly the fastest solution! 
      Also makes the structure of the calculation clear. */
@@ -333,6 +347,12 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
   switch(modeX) {
 
   case INTSXP:
+
+    /* integer NA requires special handling (see below) */
+
+    if (modeX==INTSXP)
+      for (r = 0; r < xlen; r++)
+	INTEGER_POINTER(X)[r] = NA_INTEGER;
 
     for (i = 0; i < ilen; i++) {
 
@@ -385,6 +405,11 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
 
   case REALSXP:
 
+#ifndef IEEE_754
+    for (r = 0; r < xlen; r++)
+      NUMERIC_POINTER(X)[r] = NA_REAL;
+#endif
+
     for (i = 0; i < ilen; i++) {
 
       for (baseA = 0, r = 0; r < nppI; r++)
@@ -404,10 +429,10 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
 	    posB += strideB[nppK + r] * ppJ[r];
 	  }
 
-	  if (IS_INTEGER(A)) {
+	  if (modeA == INTSXP) {
 	    DtermA = (double) INTEGER_POINTER(A)[posA];
 	    DtermB = NUMERIC_POINTER(B)[posB];
-	  } else if (IS_INTEGER(B)) {
+	  } else if (modeB == INTSXP) {
 	    DtermA = NUMERIC_POINTER(A)[posA];
 	    DtermB = (double) INTEGER_POINTER(B)[posB];
 	  } else {
@@ -446,6 +471,13 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
 
   case CPLXSXP:
 
+#ifndef IEEE_754
+    for (r = 0; r < xlen; r++) {
+      COMPLEX_POINTER(X)[r].r = NA_REAL;
+      COMPLEX_POINTER(X)[r].i = NA_REAL;
+    }
+#endif
+
     for (i = 0; i < ilen; i++) {
 
       for (baseA = 0, r = 0; r < nppI; r++)
@@ -466,19 +498,19 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
 	    posB += strideB[nppK + r] * ppJ[r];
 	  }
 
-	  if (IS_NUMERIC(A) || IS_INTEGER(A)) {
-	    if (IS_NUMERIC(A))
-	      CtermA.r = NUMERIC_POINTER(A)[posA];
-	    else
+	  if (modeA != CPLXSXP) {
+	    if (modeA == INTSXP)
 	      CtermA.r = (double) INTEGER_POINTER(A)[posA];
+	    else
+	      CtermA.r = NUMERIC_POINTER(A)[posA];
 	    CtermA.i = 0.0;
 	    CtermB.r = COMPLEX_POINTER(B)[posB].r;
 	    CtermB.i = COMPLEX_POINTER(B)[posB].i;
-	  } else if (IS_NUMERIC(B) || IS_INTEGER(B)) {
-	    if (IS_NUMERIC(B))
-	      CtermB.r = NUMERIC_POINTER(B)[posB];
-	    else
+	  } else if (modeB != CPLXSXP) {
+	    if (modeB == INTSXP)
 	      CtermB.r = (double) INTEGER_POINTER(B)[posB];
+	    else
+	      CtermB.r = NUMERIC_POINTER(B)[posB];
 	    CtermB.i = 0.0;
 	    CtermA.r = COMPLEX_POINTER(A)[posA].r;
 	    CtermA.i = COMPLEX_POINTER(A)[posA].i;
@@ -522,7 +554,7 @@ SEXP tensor(SEXP A, SEXP B, SEXP alongA, SEXP alongB)
     break;
 
   default:
-    UNPROTECT(4);
+    UNPROTECT(3);
     error("Never get here");
     break;
 

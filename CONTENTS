@@ -1,6 +1,0 @@
-Entry: tensor
-Aliases: tensor %O% %*t% %t*% %t*t%
-Keywords: array
-Description: Tensor product of arrays
-URL: ../../../library/tensor/html/tensor.html
-

@@ -1,7 +1,6 @@
 \name{tensor}
 
 \alias{tensor}
-\alias{\%O\%}
 \alias{\%*t\%}
 \alias{\%t*\%}
 \alias{\%t*t\%}
@@ -26,26 +25,10 @@ tensor(A, B, alongA = integer(0), alongB = integer(0))
  \item{alongB}{Extents in \code{B} to be collapsed}
 }
 
-\details{A straightforward implementation of \code{tensor} in \R
-would be to perm the along extents to the end of each object,
-reshape each object as a matrix with the columns corresponding to
-the along extents, take the matrix product of the first object
-with the transpose of the second, and then reshape the result.
-This happens to be very expensive if the objects are large (and
-people who want tensors often have large objects!).  But it is
-recommended if speed is an issue and RAM is ample.
-
-This \code{tensor} implements the tensor product without perming
-or reshaping using the concept of `strides', which will be
-familiar to numerical programmers in Python.  In other words, if
-\code{A}, \code{B} and their required tensor product fit into the
-available memory, then the calculation will complete (modulo a
-few small objects created \emph{en route}).  All code is written
-in "C", for speed.  \code{NA} is fully supported and the original
-storage type of the objects (integer, double or complex) is
-preserved, where possible.  This might be useful for matrix
-products on integers (which \R promotes to doubles): see the
-Section on Shortcuts below.}
+\details{This code does the `obvious' thing, which is to perm the
+"along" extents to the end (for \code{A}) and beginning (for
+\code{B}) of the two objects and then do a matrix multiplication
+and reshape.}
 
 \value{Generally, an array with dimension comprising the
 remaining extents of \code{A} concatenated with the remaining
@@ -65,51 +48,31 @@ a 5-vector then \code{tensor(A, B, 2, 1)} is a 1D array of length
 independently useful, and these have got shortcuts as follows.
 
 \tabular{ll}{
-\%O\%	\tab	Outer product of \code{A} and \code{B}	\cr
 \%*t\%	\tab	Matrix product \code{A \%*\% t(B)}	\cr
 \%t*\%	\tab	Matrix product \code{t(A) \%*\% B}	\cr
 \%t*t\%	\tab	Matrix product \code{t(A) \%*\% t(B)}	
-}}
+}
+}
 
 \author{Jonathan Rougier, \email{J.C.Rougier@durham.ac.uk}}
 
-\seealso{\code{\link{outer}}}
+\seealso{\code{\link{matmult}}, \code{\link{aperm}}}
 
 \examples{
-  A <- matrix(1:6, 2, 3) # has storage mode "integer"
-  dimnames(A) <- list(happy = LETTERS[1:2], sad = NULL) # just for fun!
+  A <- matrix(1:6, 2, 3)
+  dimnames(A) <- list(happy = LETTERS[1:2], sad = NULL)
   B <- matrix(1:12, 4, 3)
-  all(A \%*\% t(B) == tensor(A, B, 2, 2)) # TRUE
-  A \%*t\% B # same answer
+  stopifnot(A \%*\% t(B) == tensor(A, B, 2, 2))
 
-  A <- A \%O\% A # now 2 by 3 by 2 by 3
-  C <- tensor(A, B, 2, 2) # will be 2 by 2 by 3 by 4
-  D <- tensor(C, B, c(4, 3), c(1, 2)) # will be 2 by 2
+  A <- A \%o\% A
+  C <- tensor(A, B, 2, 2)
+  stopifnot(all(dim(C) == c(2, 2, 3, 4)))
+  D <- tensor(C, B, c(4, 3), c(1, 2))
+  stopifnot(all(dim(D) == c(2, 2)))
 
   E <- matrix(9:12, 2, 2)
-  s <- tensor(D, E, 1:2, 1:2) # scalar, NO dim attribute
-  s == sum(D * E) # TRUE
-
-\testonly{
-  # test the various storage modes
-  B <- A # both mode integer
-  storage.mode(s <- tensor(A, B, 4:1, 4:1))=="integer"
-  s == sum(A * B)
-  storage.mode(s <- tensor(A, B + 0.0, 4:1, 4:1))=="double"
-  s == sum(A * (B + 0.0))
-  storage.mode(s <- tensor(A + 0.0, B, 4:1, 4:1))=="double"
-  s == sum((A + 0.0) * B)
-  storage.mode(s <- tensor(A, B + 2i, 4:1, 4:1))=="complex"
-  s == sum(A * (B + 2i))
-  storage.mode(s <- tensor(A + 2i, B, 4:1, 4:1))=="complex"
-  s == sum((A + 2i) * B)
-  storage.mode(s <- tensor(A + 0.0, B + 2i, 4:1, 4:1))=="complex"
-  s == sum((A + 0.0)* (B + 2i))
-  storage.mode(s <- tensor(A + 2i, B + 0.0, 4:1, 4:1))=="complex"
-  s == sum((A + 2i)* (B + 0.0))
-  storage.mode(s <- tensor(A + 2i, B + 2i, 4:1, 4:1))=="complex"
-  s == sum((A + 2i)* (B + 2i))
-  }
+  s <- tensor(D, E, 1:2, 1:2)
+  stopifnot(s == sum(D * E), is.null(dim(s)))
 }
 
 \keyword{array}
